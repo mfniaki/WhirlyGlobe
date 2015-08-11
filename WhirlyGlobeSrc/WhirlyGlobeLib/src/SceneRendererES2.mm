@@ -694,7 +694,7 @@ static const float ScreenOverlap = 0.1;
                     glUseProgram(program->getProgram());
                     // Assign the lights if we need to
                     if (program->hasLights() && ([lights count] > 0))
-                    program->setLights(lights, lightsLastUpdated, defaultMat, currentMvpMat);
+                        program->setLights(lights, lightsLastUpdated, defaultMat, currentMvpMat);
                     // Explicitly turn the lights on
                     program->setUniform(kWKOGLNumLights, (int)[lights count]);
                     

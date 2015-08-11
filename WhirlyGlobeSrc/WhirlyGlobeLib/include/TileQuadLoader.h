@@ -149,6 +149,8 @@
 @property (nonatomic,assign) int textureAtlasSize;
 /// How many texels we put around the borders of each tile
 @property (nonatomic,assign) int borderTexel;
+/// If set (default) we'll fake the child tiles with our own parent texture
+@property (nonatomic,assign) bool fakeChildren;
 
 /// Set this up with an object that'll return an image per tile
 - (id)initWithDataSource:(NSObject<WhirlyKitQuadTileImageDataSource> *)imageSource;

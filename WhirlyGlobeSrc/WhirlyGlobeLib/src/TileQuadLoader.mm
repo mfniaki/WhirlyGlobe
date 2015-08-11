@@ -99,6 +99,7 @@ using namespace WhirlyKit;
         _borderTexel = 1;
         _enable = true;
         _useTileCenters = true;
+        _fakeChildren = true;
         defaultTessX = defaultTessY = 10;
         canLoadFrames = [inDataSource respondsToSelector:@selector(quadTileLoader:startFetchForLevel:col:row:frame:attrs:)];
         pthread_mutex_init(&tileLock, NULL);
@@ -281,6 +282,21 @@ using namespace WhirlyKit;
     return retTile;
 }
 
+// For sure when you already have the tile lock
+- (LoadedTile *)getTileNoLock:(Quadtree::Identifier)ident
+{
+    LoadedTile *retTile = NULL;
+    
+    LoadedTile dummyTile;
+    dummyTile.nodeInfo.ident = ident;
+    LoadedTileSet::iterator it = tileSet.find(&dummyTile);
+    
+    if (it != tileSet.end())
+        retTile = *it;
+    
+    return retTile;
+}
+
 // Make all the various parents update their child geometry
 - (void)refreshParents:(WhirlyKitQuadDisplayLayer *)layer
 {
@@ -304,8 +320,21 @@ using namespace WhirlyKit;
                     Quadtree::Identifier childIdent(2*theTile->nodeInfo.ident.x+ix,2*theTile->nodeInfo.ident.y+iy,theTile->nodeInfo.ident.level+1);
                     childTiles[iy*2+ix] = [self getTile:childIdent];
                 }
+            LoadedTile *parentTile = nil;
+            LoadedTile *siblingTiles[4] = {nil,nil,nil,nil};
+            if (theTile->nodeInfo.ident.level > 0)
+            {
+                Quadtree::Identifier parentIdent(theTile->nodeInfo.ident.x/2,theTile->nodeInfo.ident.y/2,theTile->nodeInfo.ident.level-1);
+                parentTile = [self getTile:parentIdent];
+                for (unsigned int iy=0;iy<2;iy++)
+                    for (unsigned int ix=0;ix<2;ix++)
+                    {
+                        Quadtree::Identifier childIdent(2*parentIdent.x+ix,2*parentIdent.y+iy,parentIdent.level+1);
+                        siblingTiles[iy*2+ix] = [self getTile:childIdent];
+                    }
+            }
             std::vector<Quadtree::Identifier> nodesEnabled,nodesDisabled;
-            theTile->updateContents(tileBuilder,childTiles,currentImage0,currentImage1,changeRequests,nodesEnabled,nodesDisabled);
+            theTile->updateContents(tileBuilder,parentTile,siblingTiles,childTiles,currentImage0,currentImage1,changeRequests,nodesEnabled,nodesDisabled);
             
             // Let the delegate know about enables and disables
             if (!nodesEnabled.empty() && [dataSource respondsToSelector:@selector(tileWasEnabledLevel:col:row:)])
@@ -621,9 +650,23 @@ using namespace WhirlyKit;
         if (!tile->isInitialized)
         {
             parentUpdate = true;
+            LoadedTile *siblingTiles[4] = {nil,nil,nil,nil};
+            LoadedTile *parentTile = nil;
+            if (tile->nodeInfo.ident.level > 0)
+            {
+                Quadtree::Identifier parentIdent(tile->nodeInfo.ident.x/2,tile->nodeInfo.ident.y/2,tile->nodeInfo.ident.level-1);
+                parentTile = [self getTileNoLock:parentIdent];
+                if (parentTile)
+                    for (unsigned int iy=0;iy<2;iy++)
+                        for (unsigned int ix=0;ix<2;ix++)
+                        {
+                            Quadtree::Identifier childIdent(2*parentIdent.x+ix,2*parentIdent.y+iy,parentIdent.level+1);
+                            siblingTiles[iy*2+ix] = [self getTileNoLock:childIdent];
+                        }
+            }
             // Build the tile geometry
 //            NSLog(@"Adding to scene: %d: (%d,%d) %d",tile->nodeInfo.ident.level,tile->nodeInfo.ident.x,tile->nodeInfo.ident.y,frame);
-            if (tile->addToScene(tileBuilder,loadImages,frame,currentImage0,currentImage1,loadElev,changeRequests))
+            if (tile->addToScene(tileBuilder,parentTile,siblingTiles,loadImages,frame,currentImage0,currentImage1,loadElev,changeRequests))
             {
                 // If we have more than one image to display, make sure we're doing the right one
                 if (!isPlaceholder && _numImages > 1 && tileBuilder->texAtlas)
@@ -653,8 +696,20 @@ using namespace WhirlyKit;
 //    NSLog(@"Loaded image for tile (%d,%d,%d)",col,row,level);
     
     // Various child state changed so let's update the parents
-    if (parentUpdate && level > 0 && _quadLayer.targetLevels.empty())
-        parents.insert(Quadtree::Identifier(col/2,row/2,level-1));
+    if (parentUpdate && _quadLayer.targetLevels.empty() && level > 0) {
+        Quadtree::Identifier parentIdent(col/2,row/2,level-1);
+        parents.insert(parentIdent);
+        // Update all that parent's children as well
+        if (!tileBuilder->fakeChildren)
+        {
+            for (unsigned int iy=0;iy<2;iy++)
+                for (unsigned int ix=0;ix<2;ix++)
+                {
+                    Quadtree::Identifier childIdent(2*parentIdent.x+ix,2*parentIdent.y+iy,parentIdent.level+1);
+                    parents.insert(childIdent);
+                }
+        }
+    }
     
     if (!doingUpdate)
         [self flushUpdates:_quadLayer.layerThread];

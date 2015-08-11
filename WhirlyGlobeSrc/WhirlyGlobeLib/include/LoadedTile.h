@@ -241,6 +241,9 @@ public:
     
     // Set if we're in single level mode.  That is, we're only trying to display a single level.
     bool singleLevel;
+    
+    // Set if we're faking the children in the parent
+    bool fakeChildren;
 };
     
 /** The Loaded Tile is used to track tiles that have been
@@ -258,7 +261,7 @@ public:
     void calculateSize(Quadtree *quadTree,CoordSystemDisplayAdapter *coordAdapt,CoordSystem *coordSys);
     
     /// Build the data needed for a scene representation
-    bool addToScene(TileBuilder *tileBuilder,std::vector<WhirlyKitLoadedImage *>loadImages,int frame,int currentImage0,int currentImage1,NSObject<WhirlyKitElevationChunk> *loadElev,std::vector<WhirlyKit::ChangeRequest *> &changeRequests);
+    bool addToScene(TileBuilder *tileBuilder,LoadedTile *parentTile,LoadedTile *siblingTiles[],std::vector<WhirlyKitLoadedImage *>loadImages,int frame,int currentImage0,int currentImage1,NSObject<WhirlyKitElevationChunk> *loadElev,std::vector<WhirlyKit::ChangeRequest *> &changeRequests);
     
     /// Update the texture in an existing tile.  This is for loading frames of animation
     bool updateTexture(TileBuilder *tileBuilder,WhirlyKitLoadedImage *loadImage,int frame,std::vector<WhirlyKit::ChangeRequest *> &changeRequests);
@@ -268,7 +271,7 @@ public:
     void clearContents(TileBuilder *tileBuilder,std::vector<WhirlyKit::ChangeRequest *> &changeRequests);
     
     /// Update what we're displaying based on the quad tree, particulary for children
-    void updateContents(TileBuilder *tileBuilder,LoadedTile *childTiles[],int currentImage0,int currentImage1,std::vector<WhirlyKit::ChangeRequest *> &changeRequests,std::vector<Quadtree::Identifier> &nodesEnabled,std::vector<Quadtree::Identifier> &nodesDisabled);
+    void updateContents(TileBuilder *tileBuilder,LoadedTile *parentTile,LoadedTile *siblingTiles[],LoadedTile *childTiles[],int currentImage0,int currentImage1,std::vector<WhirlyKit::ChangeRequest *> &changeRequests,std::vector<Quadtree::Identifier> &nodesEnabled,std::vector<Quadtree::Identifier> &nodesDisabled);
     
     /// Switch to the given images
     void setCurrentImages(TileBuilder *tileBuilder,int whichImage0,int whichImage1,std::vector<WhirlyKit::ChangeRequest *> &changeRequests);

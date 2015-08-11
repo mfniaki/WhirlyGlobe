@@ -281,7 +281,9 @@ TileBuilder::TileBuilder(CoordSystem *coordSys,Mbr mbr,WhirlyKit::Quadtree *quad
     texAtlas(NULL),
     newDrawables(false),
     singleLevel(false),
-    useTileCenters(true)
+    useTileCenters(true),
+    // Note: Debugging
+    fakeChildren(false)
 {
     pthread_mutex_init(&texAtlasMappingLock, NULL);
 }
@@ -935,7 +937,7 @@ bool LoadedTile::updateTexture(TileBuilder *tileBuilder,WhirlyKitLoadedImage *lo
 }
 
 // Add the geometry and texture to the scene for a given tile
-bool LoadedTile::addToScene(TileBuilder *tileBuilder,std::vector<WhirlyKitLoadedImage *>loadImages,int frame,int currentImage0,int currentImage1,NSObject<WhirlyKitElevationChunk> *loadElev,std::vector<WhirlyKit::ChangeRequest *> &changeRequests)
+bool LoadedTile::addToScene(TileBuilder *tileBuilder,LoadedTile *parentTile,LoadedTile *siblingTiles[],std::vector<WhirlyKitLoadedImage *>loadImages,int frame,int currentImage0,int currentImage1,NSObject<WhirlyKitElevationChunk> *loadElev,std::vector<WhirlyKit::ChangeRequest *> &changeRequests)
 {
     isInitialized = true;
     
@@ -944,6 +946,21 @@ bool LoadedTile::addToScene(TileBuilder *tileBuilder,std::vector<WhirlyKitLoaded
     {
         placeholder = true;
         return true;
+    }
+    
+    bool showThisTile = true;
+    if (parentTile && !parentTile->placeholder)
+    {
+        // Check what the parent of this tile is up to
+        bool parentAllChildPresent = true;
+        for (unsigned int iy=0;iy<2;iy++)
+            for (unsigned int ix=0;ix<2;ix++)
+            {
+                LoadedTile *childTile = siblingTiles[iy*2+ix];
+                parentAllChildPresent &= childTile && (childTile->isInitialized || childTile->placeholder);
+            }
+        
+        showThisTile &= parentAllChildPresent;
     }
     
     BasicDrawable *draw = NULL;
@@ -997,23 +1014,28 @@ bool LoadedTile::addToScene(TileBuilder *tileBuilder,std::vector<WhirlyKitLoaded
         }
     }
 
-    // Now for the changes to the scene
-    if (tileBuilder->drawAtlas)
+    drawId = EmptyIdentity;
+    skirtDrawId = EmptyIdentity;
+    if (showThisTile)
     {
-        bool addedBigDraw = false;
-        tileBuilder->drawAtlas->addDrawable(draw,changeRequests,true,&startTexIDs,&addedBigDraw,&dispCenter,tileSize);
-        tileBuilder->newDrawables |= addedBigDraw;
-        delete draw;
-        if (skirtDraw)
+        // Now for the changes to the scene
+        if (tileBuilder->drawAtlas)
         {
-            tileBuilder->drawAtlas->addDrawable(skirtDraw,changeRequests,true,&startTexIDs,&addedBigDraw,&dispCenter,tileSize);
+            bool addedBigDraw = false;
+            tileBuilder->drawAtlas->addDrawable(draw,changeRequests,true,&startTexIDs,&addedBigDraw,&dispCenter,tileSize);
             tileBuilder->newDrawables |= addedBigDraw;
-            delete skirtDraw;
+            delete draw;
+            if (skirtDraw)
+            {
+                tileBuilder->drawAtlas->addDrawable(skirtDraw,changeRequests,true,&startTexIDs,&addedBigDraw,&dispCenter,tileSize);
+                tileBuilder->newDrawables |= addedBigDraw;
+                delete skirtDraw;
+            }
+        } else {
+            changeRequests.push_back(new AddDrawableReq(draw));
+            if (skirtDraw)
+                changeRequests.push_back(new AddDrawableReq(skirtDraw));
         }
-    } else {
-        changeRequests.push_back(new AddDrawableReq(draw));
-        if (skirtDraw)
-            changeRequests.push_back(new AddDrawableReq(skirtDraw));
     }
     
     // Just in case, we don't have any child drawables here
@@ -1083,7 +1105,7 @@ bool TileBuilder::isValidTile(const Mbr &theMbr)
 }
 
 // Update based on what children are doing
-void LoadedTile::updateContents(TileBuilder *tileBuilder,LoadedTile *childTiles[],int currentImage0,int currentImage1,ChangeSet &changeRequests,std::vector<Quadtree::Identifier> &nodesEnabled,std::vector<Quadtree::Identifier> &nodesDisabled)
+void LoadedTile::updateContents(TileBuilder *tileBuilder,LoadedTile *parentTile,LoadedTile *siblingTiles[],LoadedTile *childTiles[],int currentImage0,int currentImage1,ChangeSet &changeRequests,std::vector<Quadtree::Identifier> &nodesEnabled,std::vector<Quadtree::Identifier> &nodesDisabled)
 {
     bool childrenExist = false;
     
@@ -1102,94 +1124,135 @@ void LoadedTile::updateContents(TileBuilder *tileBuilder,LoadedTile *childTiles[
         }
     }
     
-    // Work through the possible children
+    // Figure out how many child tiles we have
     int whichChild = 0;
+    bool allPresent = true;
+    bool arePresent[4];
     for (unsigned int iy=0;iy<2;iy++)
         for (unsigned int ix=0;ix<2;ix++)
         {
-            // Is it here?
-            bool isPresent = false;
             Quadtree::Identifier childIdent(2*nodeInfo.ident.x+ix,2*nodeInfo.ident.y+iy,nodeInfo.ident.level+1);
-//            LoadedTile *childTile = [loader getTile:childIdent];
+            //            LoadedTile *childTile = [loader getTile:childIdent];
             LoadedTile *childTile = childTiles[iy*2+ix];
-            isPresent = childTile && childTile->isInitialized;
-            
-            // If it exists, make sure we're not representing it here
-            if (isPresent)
-            {
-                // Turn the child back off
-                if (childDrawIds[whichChild] != EmptyIdentity)
-                {
-                    if (tileBuilder->drawAtlas)
-                    {
-                        tileBuilder->drawAtlas->removeDrawable(childDrawIds[whichChild], changeRequests);
-                        if (childSkirtDrawIds[whichChild])
-                            tileBuilder->drawAtlas->removeDrawable(childSkirtDrawIds[whichChild], changeRequests);
-                    } else {
-                        changeRequests.push_back(new RemDrawableReq(childDrawIds[whichChild]));
-                        if (childSkirtDrawIds[whichChild])
-                            changeRequests.push_back(new RemDrawableReq(childSkirtDrawIds[whichChild]));
-                    }
-                    childDrawIds[whichChild] = EmptyIdentity;
-                    childSkirtDrawIds[whichChild] = EmptyIdentity;
-                }
-                
-                childrenExist = true;
-            } else {
-                // It's not there, so make sure we're faking it with our texture
-                // May need to build the geometry
-                if (childDrawIds[whichChild] == EmptyIdentity)
-                {
-                    Quadtree::NodeInfo childInfo = tileBuilder->tree->generateNode(childIdent);
-                    if (tileBuilder->isValidTile(childInfo.mbr) && !placeholder)
-                    {
-                        BasicDrawable *childDraw = NULL;
-                        BasicDrawable *childSkirtDraw = NULL;
-                        tileBuilder->buildTile(&childInfo,&childDraw,&childSkirtDraw,NULL,Point2f(0.5,0.5),Point2f(0.5*ix,0.5*iy),nil,elevData,dispCenter);
-                        // Set this to change the color of child drawables.  Helpfull for debugging
-                        //                        childDraw->setColor(RGBAColor(64,64,64,255));
-                        childDrawIds[whichChild] = childDraw->getId();
-                        if (childSkirtDraw)
-                            childSkirtDrawIds[whichChild] = childSkirtDraw->getId();
-                        if (!tileBuilder->lineMode && !texIds.empty())
-                        {
-                            childDraw->setTexId(0,texIds[0]);
-                            if (childSkirtDraw)
-                                childSkirtDraw->setTexId(0,texIds[0]);
-                        }
-                        if (tileBuilder->texAtlas)
-                        {
-                            if (childDraw && !subTexs.empty())
-                                childDraw->applySubTexture(-1,subTexs[0]);
-                            if (childSkirtDraw && !subTexs.empty())
-                                childSkirtDraw->applySubTexture(-1,subTexs[0]);
-                        }
-                        if (tileBuilder->drawAtlas)
-                        {
-                            bool addedBigDrawable = false;
-                            tileBuilder->drawAtlas->addDrawable(childDraw, changeRequests,true,&startTexIDs,&addedBigDrawable,&dispCenter,tileSize);
-                            tileBuilder->newDrawables |= addedBigDrawable;
-                            delete childDraw;
-                            if (childSkirtDraw)
-                            {
-                                tileBuilder->drawAtlas->addDrawable(childSkirtDraw, changeRequests,true,&startTexIDs,&addedBigDrawable,&dispCenter,tileSize);
-                                tileBuilder->newDrawables |= addedBigDrawable;
-                                delete childSkirtDraw;
-                            }
-                        } else {
-                            changeRequests.push_back(new AddDrawableReq(childDraw));
-                            if (childSkirtDraw)
-                                changeRequests.push_back(new AddDrawableReq(childSkirtDraw));
-                        }
-                    }
-                }
-            }
-            
+            arePresent[whichChild] = childTile && (childTile->isInitialized || childTile->placeholder);
+            allPresent &= arePresent[whichChild];
+
             whichChild++;
         }
     
-    // No children, so turn the geometry for this tile back on
-    if (!childrenExist)
+    bool showThisTile = false;
+    if (!tileBuilder->fakeChildren)
+    {
+        // Show the tile if not all the children are present
+        showThisTile = !allPresent;
+        if (parentTile && parentTile->placeholder)
+            showThisTile = true;
+        
+        // Check what the parent of this tile is up to
+        if (showThisTile && parentTile && !parentTile->placeholder)
+        {
+            bool parentAllChildPresent = true;
+            for (unsigned int iy=0;iy<2;iy++)
+                for (unsigned int ix=0;ix<2;ix++)
+                {
+                    LoadedTile *childTile = siblingTiles[iy*2+ix];
+                    parentAllChildPresent &= childTile && childTile->isInitialized;
+                }
+
+            showThisTile = parentAllChildPresent;
+        }
+    } else {
+        // Work through the possible children
+        whichChild = 0;
+        for (unsigned int iy=0;iy<2;iy++)
+            for (unsigned int ix=0;ix<2;ix++)
+            {
+                // Is it here?
+                bool isPresent = arePresent[whichChild];
+                Quadtree::Identifier childIdent(2*nodeInfo.ident.x+ix,2*nodeInfo.ident.y+iy,nodeInfo.ident.level+1);
+    //            LoadedTile *childTile = [loader getTile:childIdent];
+                LoadedTile *childTile = childTiles[iy*2+ix];
+                isPresent = childTile && childTile->isInitialized;
+                
+                // If it exists, make sure we're not representing it here
+                if (isPresent)
+                {
+                    // Turn the child back off
+                    if (childDrawIds[whichChild] != EmptyIdentity)
+                    {
+                        if (tileBuilder->drawAtlas)
+                        {
+                            tileBuilder->drawAtlas->removeDrawable(childDrawIds[whichChild], changeRequests);
+                            if (childSkirtDrawIds[whichChild])
+                                tileBuilder->drawAtlas->removeDrawable(childSkirtDrawIds[whichChild], changeRequests);
+                        } else {
+                            changeRequests.push_back(new RemDrawableReq(childDrawIds[whichChild]));
+                            if (childSkirtDrawIds[whichChild])
+                                changeRequests.push_back(new RemDrawableReq(childSkirtDrawIds[whichChild]));
+                        }
+                        childDrawIds[whichChild] = EmptyIdentity;
+                        childSkirtDrawIds[whichChild] = EmptyIdentity;
+                    }
+                    
+                    childrenExist = true;
+                } else {
+                    // It's not there, so make sure we're faking it with our texture
+                    // May need to build the geometry
+                    if (childDrawIds[whichChild] == EmptyIdentity)
+                    {
+                        Quadtree::NodeInfo childInfo = tileBuilder->tree->generateNode(childIdent);
+                        if (tileBuilder->isValidTile(childInfo.mbr) && !placeholder)
+                        {
+                            BasicDrawable *childDraw = NULL;
+                            BasicDrawable *childSkirtDraw = NULL;
+                            tileBuilder->buildTile(&childInfo,&childDraw,&childSkirtDraw,NULL,Point2f(0.5,0.5),Point2f(0.5*ix,0.5*iy),nil,elevData,dispCenter,&this->nodeInfo);
+                            // Set this to change the color of child drawables.  Helpfull for debugging
+                            //                        childDraw->setColor(RGBAColor(64,64,64,255));
+                            childDrawIds[whichChild] = childDraw->getId();
+                            if (childSkirtDraw)
+                                childSkirtDrawIds[whichChild] = childSkirtDraw->getId();
+                            if (!tileBuilder->lineMode && !texIds.empty())
+                            {
+                                childDraw->setTexId(0,texIds[0]);
+                                if (childSkirtDraw)
+                                    childSkirtDraw->setTexId(0,texIds[0]);
+                            }
+                            if (tileBuilder->texAtlas)
+                            {
+                                if (childDraw && !subTexs.empty())
+                                    childDraw->applySubTexture(-1,subTexs[0]);
+                                if (childSkirtDraw && !subTexs.empty())
+                                    childSkirtDraw->applySubTexture(-1,subTexs[0]);
+                            }
+                            if (tileBuilder->drawAtlas)
+                            {
+                                bool addedBigDrawable = false;
+                                tileBuilder->drawAtlas->addDrawable(childDraw, changeRequests,true,&startTexIDs,&addedBigDrawable,&dispCenter,tileSize);
+                                tileBuilder->newDrawables |= addedBigDrawable;
+                                delete childDraw;
+                                if (childSkirtDraw)
+                                {
+                                    tileBuilder->drawAtlas->addDrawable(childSkirtDraw, changeRequests,true,&startTexIDs,&addedBigDrawable,&dispCenter,tileSize);
+                                    tileBuilder->newDrawables |= addedBigDrawable;
+                                    delete childSkirtDraw;
+                                }
+                            } else {
+                                changeRequests.push_back(new AddDrawableReq(childDraw));
+                                if (childSkirtDraw)
+                                    changeRequests.push_back(new AddDrawableReq(childSkirtDraw));
+                            }
+                        }
+                    }
+                }
+                
+                whichChild++;
+            }
+        
+        showThisTile = !childrenExist;
+    }
+
+    // Turn the geometry for this tile on
+    if (showThisTile)
     {
         if (drawId == EmptyIdentity && !placeholder)
         {
