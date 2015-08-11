@@ -635,8 +635,8 @@ void SelectionManager::removeSelectables(const SimpleIDSet &selectIDs)
         }
     }
     
-    if (!found)
-        NSLog(@"Tried to delete selectable that doesn't exist.");
+//    if (!found)
+//        NSLog(@"Tried to delete selectable that doesn't exist.");
     
     pthread_mutex_unlock(&mutex);
 }
@@ -876,7 +876,10 @@ void SelectionManager::pickObjects(Point2f touchPt,float maxDist,WhirlyKitView *
         }
         
         if (!multi && !selObjs.empty())
+        {
+            pthread_mutex_unlock(&mutex);
             return;
+        }
     }
 
     Point3d eyePos;

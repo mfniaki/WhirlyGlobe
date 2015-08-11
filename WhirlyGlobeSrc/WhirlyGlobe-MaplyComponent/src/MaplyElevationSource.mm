@@ -32,7 +32,7 @@
 - (id)initWithGridData:(NSData *)data sizeX:(unsigned int)sizeX sizeY:(unsigned int)sizeY
 {
     if (self = [super init])
-        self.chunkImpl = [[WhirlyKitElevationGridChunk alloc] initWithFloatData:data sizeX:sizeX sizeY:sizeY];
+        self.chunkImpl = [[WhirlyKitElevationGridChunk alloc] initWithShortData:data sizeX:sizeX sizeY:sizeY];
     
     return self;
 }
@@ -47,6 +47,13 @@
         self.chunkImpl = [[WhirlyKitElevationCesiumChunk alloc] initWithCesiumData:data sizeX:sizeX sizeY:sizeY];
     
     return self;
+}
+
+- (void)setScale:(float)scale
+{
+    _scale = scale;
+    if ([self.chunkImpl respondsToSelector:@selector(setScale:)])
+        [(WhirlyKitElevationCesiumChunk *)self.chunkImpl setScale:scale];
 }
 
 @end

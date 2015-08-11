@@ -76,7 +76,7 @@ LocationInfo locations[NumLocations] =
 typedef enum {HighPerformance,LowPerformance} PerformanceMode;
 
 // Lowest priority for base layers
-static const int BaseEarthPriority = 10;
+static const int BaseEarthPriority = kMaplyImageLayerDrawPriorityDefault;
 
 // Local interface for TestViewController
 // We'll hide a few things here
@@ -277,16 +277,23 @@ static const int BaseEarthPriority = 10;
         [mapViewC animateToPosition:MaplyCoordinateMakeWithDegrees(-122.4192, 37.7793) time:1.0];
     }
     
+    NSString *cacheDir = [NSSearchPathForDirectoriesInDomains(NSCachesDirectory, NSUserDomainMask, YES)  objectAtIndex:0];
+    
     // For elevation mode, we need to do some other stuff
     if (startupMapType == MaplyGlobeWithElevation)
     {
         // Tilt, so we can see it
         if (globeViewC)
-            [globeViewC setTiltMinHeight:0.001 maxHeight:0.04 minTilt:1.21771169 maxTilt:0.0];
+            [globeViewC setTiltMinHeight:0.001 maxHeight:0.04 minTilt:1.40 maxTilt:0.0];
         globeViewC.frameInterval = 2;  // 30fps
 
         // Cesium as an elevation source
-        elevSource = [[MaplyRemoteTileElevationCesiumSource alloc] initWithBaseURL:@"http://cesiumjs.org/stk-terrain/tilesets/world/tiles/" ext:@"terrain" minZoom:0 maxZoom:22];
+        // Note: Debugging
+//        MaplyRemoteTileElevationCesiumSource *cesiumElev = [[MaplyRemoteTileElevationCesiumSource alloc] initWithBaseURL:@"http://cesiumjs.org/stk-terrain/tilesets/world/tiles/" ext:@"terrain" minZoom:0 maxZoom:16];
+        MaplyRemoteTileElevationCesiumSource *cesiumElev = [[MaplyRemoteTileElevationCesiumSource alloc] initWithBaseURL:@"http://cesiumjs.org/stk-terrain/tilesets/world/tiles/" ext:@"terrain" minZoom:0 maxZoom:22];
+        elevSource = cesiumElev;
+        cesiumElev.cacheDir = [NSString stringWithFormat:@"%@/cesiumElev/",cacheDir];
+
         baseViewC.elevDelegate = elevSource;
         zoomLimit = 22;
         requireElev = true;
@@ -297,6 +304,28 @@ static const int BaseEarthPriority = 10;
         
         // Turn off most of the options for globe mode
         configViewC.configOptions = ConfigOptionsTerrain;
+        
+        // Set up their odd tiling system
+        MaplyCesiumCoordSystem *cesiumCoordSys = [[MaplyCesiumCoordSystem alloc] init];
+        MaplyAnimationTestTileSource *tileSource = [[MaplyAnimationTestTileSource alloc] initWithCoordSys:cesiumCoordSys minZoom:1 maxZoom:16 depth:1];
+        tileSource.useDelay = false;
+        tileSource.transparentMode = false;
+        tileSource.pixelsPerSide = 128;
+        MaplyQuadImageTilesLayer *layer = [[MaplyQuadImageTilesLayer alloc] initWithCoordSystem:tileSource.coordSys tileSource:tileSource];
+        layer.requireElev = true;
+        layer.maxTiles = 256;
+        layer.handleEdges = true;
+        layer.numSimultaneousFetches = 16;
+        [baseViewC addLayer:layer];
+        layer.drawPriority = BaseEarthPriority;
+        baseLayer = layer;
+        
+//        // Start up over Everest
+//        mapViewC.height = 1.0;
+//        [mapViewC animateToPosition:MaplyCoordinateMakeWithDegrees(86.925278, 27.988056) time:1.0];
+        
+        [self addSun];
+        [self addStars:@"starcatalog_short"];
     }
     
     // Force the view to load so we can get the default switch values
@@ -889,9 +918,10 @@ static const bool CountryTextures = true;
 - (void)addCountries:(NSArray *)names stride:(int)stride
 {
     MaplyTexture *smileTex = nil;
+    UIImage *smileImage = nil;
     if (CountryTextures)
     {
-        UIImage *smileImage = [UIImage imageNamed:@"Smiley_Face_Avatar_by_PixelTwist"];
+        smileImage = [UIImage imageNamed:@"Smiley_Face_Avatar_by_PixelTwist"];
         smileTex = [baseViewC addTexture:smileImage imageFormat:MaplyImageUShort5551 wrapFlags:MaplyImageWrapX|MaplyImageWrapY mode:MaplyThreadCurrent];
     }
 
@@ -909,6 +939,7 @@ static const bool CountryTextures = true;
                      NSString *fileName = [[NSBundle mainBundle] pathForResource:name ofType:@"geojson"];
                      if (fileName)
                      {
+                         
                          NSData *jsonData = [NSData dataWithContentsOfFile:fileName];
                          if (jsonData)
                          {
@@ -921,9 +952,9 @@ static const bool CountryTextures = true;
                              if (CountryTextures)
                              {
                                  desc[kMaplyVecTexture] = smileTex;
-                                 desc[kMaplyVecTexScaleX] = @(0.01);
-                                 desc[kMaplyVecTexScaleY] = @(0.01);
                                  desc[kMaplyVecTextureProjection] = kMaplyProjectionScreen;
+                                 desc[kMaplyVecTexScaleX] = @(1.0/smileImage.size.width);
+                                 desc[kMaplyVecTexScaleY] = @(1.0/smileImage.size.height);
                              }
                              MaplyComponentObject *compObj = [baseViewC addVectors:[NSArray arrayWithObject:wgVecObj] desc:desc];
                              MaplyScreenLabel *screenLabel = [[MaplyScreenLabel alloc] init];
@@ -981,11 +1012,12 @@ static const bool CountryTextures = true;
     {
         stars = [[MaplyStarsModel alloc] initWithFileName:fileName];
         stars.image = [UIImage imageNamed:@"star_background"];
-        [stars addToViewC:globeViewC desc:nil mode:MaplyThreadCurrent];
+        [stars addToViewC:globeViewC date:[NSDate date] desc:nil mode:MaplyThreadCurrent];
     }
 }
 
 static const bool UseSunSphere = false;
+static const bool UseMoonSphere = false;
 static const float EarthRadius = 6371000;
 
 - (void)addSun
@@ -1012,28 +1044,39 @@ static const float EarthRadius = 6371000;
     } else {
         MaplyBillboard *bill = [[MaplyBillboard alloc] init];
         MaplyCoordinate centerGeo = [sun asPosition];
-        bill.center = MaplyCoordinate3dMake(centerGeo.x, centerGeo.y, 4*EarthRadius);
+        bill.center = MaplyCoordinate3dMake(centerGeo.x, centerGeo.y, 5.4*EarthRadius);
         bill.selectable = false;
         bill.screenObj = [[MaplyScreenObject alloc] init];
         UIImage *globeImage = [UIImage imageNamed:@"SunImage"];
-        [bill.screenObj addImage:globeImage color:[UIColor whiteColor] size:CGSizeMake(1.0, 1.0)];
-        sunObj = [globeViewC addBillboards:@[bill] desc:@{kMaplyBillboardOrient: kMaplyBillboardOrientEye} mode:MaplyThreadAny];
+        [bill.screenObj addImage:globeImage color:[UIColor whiteColor] size:CGSizeMake(0.9, 0.9)];
+        sunObj = [globeViewC addBillboards:@[bill] desc:@{kMaplyBillboardOrient: kMaplyBillboardOrientEye,kMaplyDrawPriority: @(kMaplySunDrawPriorityDefault)} mode:MaplyThreadAny];
     }
     
     // Position for the moon
     MaplyMoon *moon = [[MaplyMoon alloc] initWithDate:[NSDate date]];
-    MaplyShapeSphere *sphere = [[MaplyShapeSphere alloc] init];
-    sphere.center = [moon asCoordinate];
-    sphere.radius = 0.2;
-    sphere.height = 4.0;
-    moonObj = [globeViewC addShapes:@[sphere] desc:
-               @{kMaplyColor: [UIColor grayColor],
-                 kMaplyShader: kMaplyShaderDefaultTriNoLighting}];
+    if (UseMoonSphere)
+    {
+        MaplyShapeSphere *sphere = [[MaplyShapeSphere alloc] init];
+        sphere.center = [moon asCoordinate];
+        sphere.radius = 0.2;
+        sphere.height = 4.0;
+        moonObj = [globeViewC addShapes:@[sphere] desc:
+                   @{kMaplyColor: [UIColor grayColor],
+                     kMaplyShader: kMaplyShaderDefaultTriNoLighting}];
+    } else {
+        MaplyBillboard *bill = [[MaplyBillboard alloc] init];
+        MaplyCoordinate3d centerGeo = [moon asPosition];
+        bill.center = MaplyCoordinate3dMake(centerGeo.x, centerGeo.y, 5.4*EarthRadius);
+        bill.selectable = false;
+        bill.screenObj = [[MaplyScreenObject alloc] init];
+        UIImage *moonImage = [UIImage imageNamed:@"moon"];
+        [bill.screenObj addImage:moonImage color:[UIColor colorWithWhite:moon.illuminatedFraction alpha:1.0] size:CGSizeMake(0.75, 0.75)];
+        moonObj = [globeViewC addBillboards:@[bill] desc:@{kMaplyBillboardOrient: kMaplyBillboardOrientEye, kMaplyDrawPriority: @(kMaplyMoonDrawPriorityDefault)} mode:MaplyThreadAny];
+    }
     
     // And some atmosphere, because the iDevice fill rate is just too fast
-    // Note: Debugging
     atmosObj = [[MaplyAtmosphere alloc] initWithViewC:globeViewC];
-    [atmosObj setSunDirection:[sun getDirection]];
+    [atmosObj setSunPosition:[sun getDirection]];
 }
 
 // Number of unique images to use for the mega markers
@@ -1107,6 +1150,10 @@ static const int NumMegaMarkers = 15000;
 // Also tear down an old one
 - (void)setupBaseLayer:(NSDictionary *)baseSettings
 {
+    // No fancy base layers for globe elevation
+    if (startupMapType == MaplyGlobeWithElevation)
+        return;
+    
     // Figure out which one we're supposed to display
     NSString *newBaseLayerName = nil;
     for (NSString *key in [baseSettings allKeys])
@@ -1326,7 +1373,7 @@ static const int NumMegaMarkers = 15000;
         layer.requireElev = requireElev;
         layer.maxTiles = 512;
         layer.handleEdges = true;
-        layer.color = [UIColor colorWithWhite:0.5 alpha:0.5];
+//        layer.color = [UIColor colorWithWhite:0.5 alpha:0.5];
         if (startupMapType == Maply2DMap)
         {
             // Note: Debugging
@@ -1387,17 +1434,20 @@ static const int NumMegaMarkers = 15000;
         vecColor = [UIColor blackColor];
         vecWidth = 4.0;
         MaplyAnimationTestTileSource *tileSource = [[MaplyAnimationTestTileSource alloc] initWithCoordSys:[[MaplySphericalMercator alloc] initWebStandard] minZoom:0 maxZoom:17 depth:4];
+        tileSource.transparentMode = true;
         tileSource.pixelsPerSide = 128;
         MaplyQuadImageTilesLayer *layer = [[MaplyQuadImageTilesLayer alloc] initWithCoordSystem:tileSource.coordSys tileSource:tileSource];
         layer.waitLoad = imageWaitLoad;
         layer.requireElev = requireElev;
         layer.imageDepth = 4;
-        layer.handleEdges = true;
-        // We'll cycle through at 1s per layer
-        layer.animationPeriod = 4.0;
-        layer.singleLevelLoading = (startupMapType == Maply2DMap);
-        if (startupMapType == Maply2DMap)
-            layer.multiLevelLoads = @[@(-2)];
+        layer.handleEdges = (startupMapType != Maply2DMap);
+        layer.maxTiles = 512;
+        // We'll cycle through at 1/2s per layer
+        layer.animationPeriod = 2.0;
+        layer.allowFrameLoading = false;
+        layer.useTargetZoomLevel = true;
+        layer.singleLevelLoading = true;
+        layer.multiLevelLoads = @[@(-3)];
         [baseViewC addLayer:layer];
         layer.drawPriority = BaseEarthPriority;
         baseLayer = layer;        
@@ -1474,6 +1524,17 @@ static const int NumMegaMarkers = 15000;
     }
 }
 
+// Fade testing
+- (void)quadImageFadeTest:(MaplyQuadImageTilesLayer *)layer
+{
+    if (layer)
+    {
+        layer.fade = drand48();
+        
+        [self performSelector:@selector(quadImageFadeTest:) withObject:layer afterDelay:2.0];
+    }
+}
+
 // Run through the overlays the user wants turned on
 - (void)setupOverlays:(NSDictionary *)baseSettings
 {
@@ -1521,11 +1582,13 @@ static const int NumMegaMarkers = 15000;
                 precipLayer.imageDepth = (int)[tileSources count];
                 precipLayer.animationPeriod = 6.0;
                 precipLayer.imageFormat = MaplyImageUByteRed;
-//                precipLayer.texturAtlasSize = 512;
+                //                precipLayer.texturAtlasSize = 512;
                 precipLayer.numSimultaneousFetches = 4;
                 precipLayer.handleEdges = false;
                 precipLayer.coverPoles = false;
                 precipLayer.shaderProgramName = [WeatherShader setupWeatherShader:baseViewC];
+                precipLayer.fade = 0.5;
+                //                [self quadImageFadeTest:precipLayer];
                 [baseViewC addLayer:precipLayer];
                 layer = precipLayer;
                 ovlLayers[layerName] = layer;
@@ -1850,7 +1913,7 @@ static const int NumMegaMarkers = 15000;
     {
         if (!stars)
         {
-            [self addStars:@"starcatalog_short"];
+            [self addStars:@"starcatalog_orig"];
             [self addSun];
         }
     } else {

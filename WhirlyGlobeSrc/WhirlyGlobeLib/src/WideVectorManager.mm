@@ -28,10 +28,17 @@ using namespace Eigen;
 
 @implementation WhirlyKitWideVectorInfo
 
+- (id)initWithDesc:(NSDictionary *)desc
+{
+    self = [super initWithDesc:desc];
+    [self parseDesc:desc];
+    
+    return self;
+}
+
 - (void)parseDesc:(NSDictionary *)desc
 {
     _color = [desc objectForKey:@"color" checkType:[UIColor class] default:[UIColor whiteColor]];
-    _shader = [desc intForKey:@"shader" default:EmptyIdentity];
     _width = [desc floatForKey:@"width" default:2.0];
     _coordType = (WhirlyKit::WideVectorCoordsType)[desc enumForKey:@"wideveccoordtype" values:@[@"real",@"screen"] default:WideVecCoordScreen];
     _joinType = (WhirlyKit::WideVectorLineJoinType)[desc enumForKey:@"wideveclinejointype" values:@[@"miter",@"round",@"bevel"] default:WideVecMiterJoin];
@@ -343,13 +350,13 @@ public:
             {
                 corners[2] = pbLocal + norm0;
                 corners[3] = pbLocal + revNorm0;
-                next_e0 = corners[3];
-                next_e1 = corners[2];
+                next_e0 = corners[2];
+                next_e1 = corners[3];
             } else {
                 corners[2] = pbLocal + norm0 * calcScale;
                 corners[3] = pbLocal + revNorm0 * calcScale;
-                next_e0 = corners[3];
-                next_e1 = corners[2];
+                next_e0 = corners[2];
+                next_e1 = corners[3];
             }
         }
         
@@ -477,7 +484,7 @@ public:
                     {
                         // lPt1 is a point in the middle of the prospective bevel
                         Point3d lNorm = (lPt-pbLocal).normalized();
-                        Point3d lPt1 = rPt + lNorm * vecInfo.miterLimit * calcScale * (vecInfo.coordType == WideVecCoordReal ? vecInfo.width : 1.0);
+                        Point3d lPt1 = rPt + lNorm * calcScale * (vecInfo.coordType == WideVecCoordReal ? vecInfo.width : 1.0);
                         Point3d iNorm = up.cross(lNorm);
                         pbLocalAdj = (rPt+lPt1)/2.0;
                         
@@ -542,7 +549,7 @@ public:
                         // Bending left
                         // rPt1 is a point in the middle of the prospective bevel
                         Point3d rNorm = (rPt-pbLocal).normalized();
-                        Point3d rPt1 = lPt + rNorm * vecInfo.miterLimit * calcScale * (vecInfo.coordType == WideVecCoordReal ? vecInfo.width : 1.0);
+                        Point3d rPt1 = lPt + rNorm * calcScale * (vecInfo.coordType == WideVecCoordReal ? vecInfo.width : 1.0);
                         Point3d iNorm = rNorm.cross(up);
                         pbLocalAdj = (lPt+rPt1)/2.0;
                         
@@ -710,7 +717,7 @@ public:
             } else {
                 WideVectorDrawable *wideDrawable = new WideVectorDrawable();
                 drawable = wideDrawable;
-                drawable->setProgram(vecInfo.shader);
+                drawable->setProgram(vecInfo.programID);
                 wideDrawable->setTexRepeat(vecInfo.repeatSize);
                 wideDrawable->setLineWidth(vecInfo.width);
             }
@@ -852,8 +859,7 @@ WideVectorManager::~WideVectorManager()
     
 SimpleIdentity WideVectorManager::addVectors(ShapeSet *shapes,NSDictionary *desc,ChangeSet &changes)
 {
-    WhirlyKitWideVectorInfo *vecInfo = [[WhirlyKitWideVectorInfo alloc] init];
-    [vecInfo parseDesc:desc];
+    WhirlyKitWideVectorInfo *vecInfo = [[WhirlyKitWideVectorInfo alloc] initWithDesc:desc];
     
     WideVectorDrawableBuilder builder(scene,vecInfo);
     
@@ -938,7 +944,7 @@ SimpleIdentity WideVectorManager::instanceVectors(SimpleIdentity vecID,NSDiction
              idIt != sceneRep->drawIDs.end(); ++idIt)
         {
             // Make up a BasicDrawableInstance
-            BasicDrawableInstance *drawInst = new BasicDrawableInstance("WideVectorManager",*idIt);
+            BasicDrawableInstance *drawInst = new BasicDrawableInstance("WideVectorManager",*idIt,BasicDrawableInstance::ReuseStyle);
             
             // Changed color
             if ([desc objectForKey:@"color"]) {

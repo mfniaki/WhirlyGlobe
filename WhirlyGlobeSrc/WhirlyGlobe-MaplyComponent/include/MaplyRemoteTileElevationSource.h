@@ -104,8 +104,7 @@
 
 - (MaplyElevationChunk *)decodeElevationData:(NSData *)data;
 
-
-@property (nonatomic,readonly) MaplyRemoteTileElevationInfo *tileInfo;
+@property (nonatomic,strong) MaplyRemoteTileElevationInfo *tileInfo;
 
 @property (nonatomic,weak) NSObject<MaplyRemoteTileElevationSourceDelegate> *delegate;
 
@@ -121,8 +120,19 @@
 
 
 @interface MaplyRemoteTileElevationCesiumSource : MaplyRemoteTileElevationSource
+
+/// @detail Multiply the Z values by this amount
+@property (nonatomic) float scale;
+
 @end
 
 @interface MaplyRemoteTileElevationCesiumInfo : MaplyRemoteTileElevationInfo
 @end
+
+/** @details The Cesium terrain server uses an odd tiling system with two top level nodes.
+ */
+@interface MaplyCesiumCoordSystem : MaplyPlateCarree
+
+@end
+
 

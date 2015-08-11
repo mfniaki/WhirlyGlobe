@@ -1192,7 +1192,7 @@ typedef std::set<ThreadChanges> ThreadChangeSet;
         if (tex.texID)
             inDesc[kMaplyVecTexture] = @(tex.texID);
         else
-            [inDesc removeObjectForKey:kMaplyVecTexture];
+            [inDesc removeObjectForKey:kMaplyVecTexture];        
     }
 
     ShapeSet shapes;
@@ -1222,7 +1222,7 @@ typedef std::set<ThreadChanges> ThreadChangeSet;
             shapes.insert(newVecObj.shapes.begin(),newVecObj.shapes.end());
         } else
             // We'll just reference it
-        shapes.insert(vecObj.shapes.begin(),vecObj.shapes.end());
+            shapes.insert(vecObj.shapes.begin(),vecObj.shapes.end());
     }
     
     if (makeVisible)
@@ -2354,9 +2354,6 @@ typedef std::set<GeomModelInstances *,struct GeomModelInstancesCmp> GeomModelIns
             Point3d dispPt = coordAdapter->localToDisplay(Point3d(localPt.x(),localPt.y(),bill.center.z));
             wkBill.center = dispPt;
             wkBill.isSelectable = bill.selectable;
-            // Note: Porting
-//            if (bill.vertexAttributes)
-//                [self resolveVertexAttrs:wkBill.vertexAttrs from:bill.vertexAttributes];
             if (wkBill.isSelectable)
                 wkBill.selectID = Identifiable::genId();
             
@@ -2382,6 +2379,8 @@ typedef std::set<GeomModelInstances *,struct GeomModelInstancesCmp> GeomModelIns
                 billPoly.pts = poly.pts;
                 billPoly.texCoords = poly.texCoords;
                 billPoly.color = poly.color;
+                if (bill.vertexAttributes)
+                    [self resolveVertexAttrs:billPoly.vertexAttrs from:bill.vertexAttributes];
                 if (poly.texture)
                 {
                     MaplyTexture *tex = nil;

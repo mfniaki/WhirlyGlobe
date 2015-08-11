@@ -149,7 +149,7 @@ public:
     
     // Build a given tile
     bool buildTile(Quadtree::NodeInfo *nodeInfo,BasicDrawable **draw,BasicDrawable **skirtDraw,std::vector<Texture *> *texs,
-              Point2f texScale,Point2f texOffset,std::vector<WhirlyKitLoadedImage *> *loadImages,NSObject<WhirlyKitElevationChunk> *elevData,const Point3d &theCenter);
+              Point2f texScale,Point2f texOffset,std::vector<WhirlyKitLoadedImage *> *loadImages,NSObject<WhirlyKitElevationChunk> *elevData,const Point3d &theCenter,Quadtree::NodeInfo *parentNodeInfo);
     
     // Build the texture for a tile
     Texture *buildTexture(WhirlyKitLoadedImage *loadImage);
@@ -204,6 +204,9 @@ public:
     
     // Whether we start new drawables enabled or disabled
     bool enabled;
+    
+    // Fade for drawables
+    float fade;
 
     // Number of samples to use for tiles
     int defaultSphereTessX,defaultSphereTessY;
@@ -278,7 +281,11 @@ public:
     
     /// Turn drawables on/off
     void setEnable(TileBuilder *tileBuilder, bool enable, ChangeSet &theChanges);
-    
+
+    /// Change the fade on drawables
+    // Note: This does nothing for the the non-bigdrawable case
+    void setFade(TileBuilder *tileBuilder, float fade, ChangeSet &theChanges);
+
     /// Dump out to the log
     void Print(TileBuilder *tileBuilder);
     

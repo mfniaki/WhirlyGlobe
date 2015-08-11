@@ -278,6 +278,7 @@ TileBuilder::TileBuilder(CoordSystem *coordSys,Mbr mbr,WhirlyKit::Quadtree *quad
     lineMode(false),
     activeTextures(-1),
     enabled(true),
+    fade(1.0),
     texAtlas(NULL),
     newDrawables(false),
     singleLevel(false),
@@ -331,6 +332,7 @@ void TileBuilder::initAtlases(WhirlyKitTileImageType imageType,int numImages,int
         imageDepth = numImages;
         texAtlas = new DynamicTextureAtlas(textureAtlasSize,texSortSize,glFormat,numImages);
         drawAtlas = new DynamicDrawableAtlas("Tile Quad Loader",SingleElementSize,DrawBufferSize,ElementBufferSize,scene->getMemManager(),NULL,programId);
+        drawAtlas->setFade(fade);
         newDrawables = true;
     }
 }
@@ -683,7 +685,7 @@ void TileBuilder::generateDrawables(WhirlyKitElevationDrawInfo *drawInfo,BasicDr
 
 
 bool TileBuilder::buildTile(Quadtree::NodeInfo *nodeInfo,BasicDrawable **draw,BasicDrawable **skirtDraw,std::vector<Texture *> *texs,
-                            Point2f texScale,Point2f texOffset,std::vector<WhirlyKitLoadedImage *> *loadImages,NSObject<WhirlyKitElevationChunk> *elevData,const Point3d &dispCenter)
+                            Point2f texScale,Point2f texOffset,std::vector<WhirlyKitLoadedImage *> *loadImages,NSObject<WhirlyKitElevationChunk> *elevData,const Point3d &dispCenter,Quadtree::NodeInfo *parentNodeInfo)
 {
     Mbr theMbr = nodeInfo->mbr;
     
@@ -764,6 +766,10 @@ bool TileBuilder::buildTile(Quadtree::NodeInfo *nodeInfo,BasicDrawable **draw,Ba
     {
         WhirlyKitElevationDrawInfo drawInfo;
         drawInfo.theMbr = theMbr;
+        if (parentNodeInfo)
+            drawInfo.parentMbr = parentNodeInfo->mbr;
+        else
+            drawInfo.parentMbr = theMbr;
         drawInfo.xDim = xDim;        drawInfo.yDim = yDim;
         drawInfo.coverPoles = coverPoles;
         drawInfo.useTileCenters = useTileCenters;
@@ -968,7 +974,7 @@ bool LoadedTile::addToScene(TileBuilder *tileBuilder,LoadedTile *parentTile,Load
     std::vector<Texture *> texs(loadImages.size(),NULL);
     if (tileBuilder->texAtlas)
         subTexs.resize(loadImages.size());
-    if (!tileBuilder->buildTile(&nodeInfo, &draw, &skirtDraw, (!loadImages.empty() ? &texs : NULL), Point2f(1.0,1.0), Point2f(0.0,0.0), &loadImages, loadElev, dispCenter))
+    if (!tileBuilder->buildTile(&nodeInfo, &draw, &skirtDraw, (!loadImages.empty() ? &texs : NULL), Point2f(1.0,1.0), Point2f(0.0,0.0), &loadImages, loadElev, dispCenter,NULL))
         return false;
     drawId = draw->getId();
     skirtDrawId = (skirtDraw ? skirtDraw->getId() : EmptyIdentity);
@@ -1258,7 +1264,7 @@ void LoadedTile::updateContents(TileBuilder *tileBuilder,LoadedTile *parentTile,
         {
             BasicDrawable *draw = NULL;
             BasicDrawable *skirtDraw = NULL;
-            tileBuilder->buildTile(&nodeInfo, &draw, &skirtDraw, NULL, Point2f(1.0,1.0), Point2f(0.0,0.0), nil, elevData, dispCenter);
+            tileBuilder->buildTile(&nodeInfo, &draw, &skirtDraw, NULL, Point2f(1.0,1.0), Point2f(0.0,0.0), nil, elevData, dispCenter, NULL);
             drawId = draw->getId();
             if (!texIds.empty())
                 draw->setTexId(0,texIds[0]);
@@ -1385,6 +1391,23 @@ void LoadedTile::setEnable(TileBuilder *tileBuilder, bool enable, ChangeSet &the
         if (childSkirtDrawIds[ii] != EmptyIdentity)
             theChanges.push_back(new OnOffChangeRequest(childSkirtDrawIds[ii],enable));
     }
+}
+
+// Note: This does nothing
+void LoadedTile::setFade(TileBuilder *tileBuilder, float fade, ChangeSet &theChanges)
+{
+//    if (drawId != EmptyIdentity)
+//        theChanges.push_back(new FadeChangeRequest(drawId,fade));
+//    if (skirtDrawId != EmptyIdentity)
+//        theChanges.push_back(new FadeChangeRequest(skirtDrawId,fade));
+//    
+//    for (unsigned int ii=0;ii<4;ii++)
+//    {
+//        if (childDrawIds[ii] != EmptyIdentity)
+//            theChanges.push_back(new FadeChangeRequest(childDrawIds[ii],fade));
+//        if (childSkirtDrawIds[ii] != EmptyIdentity)
+//            theChanges.push_back(new FadeChangeRequest(childSkirtDrawIds[ii],fade));
+//    }
 }
 
 void LoadedTile::Print(TileBuilder *tileBuilder)

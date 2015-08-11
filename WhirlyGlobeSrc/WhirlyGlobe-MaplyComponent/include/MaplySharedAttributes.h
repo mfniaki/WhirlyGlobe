@@ -77,8 +77,11 @@
 /// Assign a shader program to a particular feature.  Use the shader program's name
 #define kMaplyShader @"shader"
 
-/// Stars
+/// Stars, moon, stars, atmosphere
 #define kMaplyStarsDrawPriorityDefault 0
+#define kMaplySunDrawPriorityDefault 2
+#define kMaplyMoonDrawPriorityDefault 3
+#define kMaplyAtmosphereDrawPriorityDefault 10
 /// Where we start image layer draw priorities
 #define kMaplyImageLayerDrawPriorityDefault 100
 /// We'll start filling in features right around here
@@ -92,7 +95,6 @@
 #define kMaplyShapeDrawPriorityDefault 80000
 #define kMaplyBillboardDrawPriorityDefault 90000
 #define kMaplyModelDrawPriorityDefault 100000
-#define kMaplyAtmosDrawPriorityDefault 110000
 
 #define kWGMarkerDrawPriorityDefault kMaplyMarkerDrawPriorityDefault
 #define kWGVectorDrawPriorityDefault kMaplyVectorDrawPriorityDefault
@@ -182,21 +184,24 @@
 
 /// Widened vectors are joined with miters
 #define kMaplyWideVecMiterJoin @"miter"
+// Note: Not yet implemented
 /// Widened vectors are joined with a curve
-#define kMaplyWideVecRoundJoin @"round"
+//#define kMaplyWideVecRoundJoin @"round"
 /// Widened vectors are joined with a bevel
 #define kMaplyWideVecBevelJoin @"bevel"
 
 /// For wide vectors we can control the ends
 /// See: http://www.w3.org/TR/SVG/painting.html#StrokeLinecapProperty
-#define kMaplyWideVecLineCapType @"wideveclinecaptype"
+//#define kMaplyWideVecLineCapType @"wideveclinecaptype"
+
+// Note: These are not currently implemented
 
 /// Widened vector ends are flush
-#define kMaplyWideVecButtCap @"butt"
+//#define kMaplyWideVecButtCap @"butt"
 /// Widened vector ends are round (e.g. hot dog roads)
-#define kMaplyWideVecRoundCap @"round"
+//#define kMaplyWideVecRoundCap @"round"
 /// Widened vector ends are extended a bit and then flush
-#define kMaplyWideVecSquareCap @"square"
+//#define kMaplyWideVecSquareCap @"square"
 
 /// This number defines a limit past which the wide vector will switch from miters to bevels
 #define kMaplyWideVecMiterLimit @"miterLimit"
@@ -275,6 +280,10 @@
 #define kMaplyShapeSampleY @"shapesampley"
 /// If set to true, we'll tessellate a shape using the opposite vertex ordering
 #define kMaplyShapeInsideOut @"shapeinsideout"
+/// Center for the shape geometry
+#define kMaplyShapeCenterX @"shapecenterx"
+#define kMaplyShapeCenterY @"shapecentery"
+#define kMaplyShapeCenterZ @"shapecenterz"
 
 /// These are used by active vector objects
 #define kMaplyVecHeight @"height"
