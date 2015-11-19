@@ -75,7 +75,7 @@
  image type.  It's typically @"png" or @"jpg", but it
  can be anything that UIImage will recognize.
  */
-@property (nonatomic, strong, nonnull) NSString *ext;
+@property (nonatomic, strong, nullable) NSString *ext;
 
 /** @brief The timeout assigned to the NSMutableURLRequest we're using to fetch tiles.
  @details This is non set by default.  If set, we'll use this value as the timeout on the NSMutableURLRequest we use for fetching tiles.  This lets you extent it where appropriate or shorten it if you like.
