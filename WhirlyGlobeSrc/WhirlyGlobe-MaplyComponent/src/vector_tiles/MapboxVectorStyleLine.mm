@@ -23,7 +23,7 @@
 
 @implementation MapboxVectorLineLayout
 
-- (instancetype)initWithStyleEntry:(NSDictionary *)styleEntry styleSet:(MaplyMapboxVectorStyleSet *)styleSet viewC:(MaplyBaseViewController *)viewC
+- (id)initWithStyleEntry:(NSDictionary *)styleEntry styleSet:(MaplyMapboxVectorStyleSet *)styleSet viewC:(MaplyBaseViewController *)viewC
 {
     self = [super init];
     if (!self)
@@ -43,7 +43,7 @@
 
 @implementation MapboxVectorLineDashArray
 
-- (instancetype)initWithStyleEntry:(NSArray *)styleEntry styleSet:(MaplyMapboxVectorStyleSet *)styleSet viewC:(MaplyBaseViewController *)viewC
+- (id)initWithStyleEntry:(NSArray *)styleEntry styleSet:(MaplyMapboxVectorStyleSet *)styleSet viewC:(MaplyBaseViewController *)viewC
 {
     self = [super init];
     if (!self)
@@ -62,7 +62,7 @@
 
 @implementation MapboxVectorLinePaint
 
-- (instancetype)initWithStyleEntry:(NSDictionary *)styleEntry styleSet:(MaplyMapboxVectorStyleSet *)styleSet viewC:(MaplyBaseViewController *)viewC
+- (id)initWithStyleEntry:(NSDictionary *)styleEntry styleSet:(MaplyMapboxVectorStyleSet *)styleSet viewC:(MaplyBaseViewController *)viewC
 {
     self = [super init];
     if (!self)
@@ -114,7 +114,7 @@ static unsigned int NextPowOf2(unsigned int val)
     return (val + 1);
 }
 
-- (instancetype)initWithStyleEntry:(NSDictionary *)styleEntry parent:(MaplyMapboxVectorStyleLayer *)refLayer styleSet:(MaplyMapboxVectorStyleSet *)styleSet drawPriority:(int)drawPriority viewC:(MaplyBaseViewController *)viewC
+- (id)initWithStyleEntry:(NSDictionary *)styleEntry parent:(MaplyMapboxVectorStyleLayer *)refLayer styleSet:(MaplyMapboxVectorStyleSet *)styleSet drawPriority:(int)drawPriority viewC:(MaplyBaseViewController *)viewC
 {
     self = [super initWithStyleEntry:styleEntry parent:refLayer styleSet:styleSet drawPriority:drawPriority viewC:viewC];
     if (!self)
@@ -145,6 +145,17 @@ static unsigned int NextPowOf2(unsigned int val)
             double len = [num doubleValue] * maxWidth * totLenRounded / totLen;
             [dashComponents addObject:@(len)];
         }
+        
+        // Let's keep the texture a power of 2
+        int texWidth = 4;
+        if (maxWidth <= 4)
+            texWidth=  4;
+        else if (maxWidth <= 8)
+            texWidth = 8;
+        else if (maxWidth <= 16)
+            texWidth = 16;
+        else
+            texWidth = 32;
         
         MaplyLinearTextureBuilder *lineTexBuilder = [[MaplyLinearTextureBuilder alloc] init];
         [lineTexBuilder setPattern:dashComponents];

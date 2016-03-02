@@ -58,7 +58,7 @@ public:
     NSMutableDictionary *vecTiles;
 }
 
-- (instancetype)initWithViewC:(MaplyBaseViewController *)inViewC
+- (id)initWithViewC:(MaplyBaseViewController *)inViewC
 {
     self = [super init];
     if (!self)
