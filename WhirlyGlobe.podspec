@@ -76,7 +76,7 @@ Pod::Spec.new do |s|
   s.subspec 'Lib' do |l|
     l.source_files = 'WhirlyGlobeSrc/WhirlyGlobeLib/src/*.{mm,m}'
     l.dependency 'WhirlyGlobe/Lib-Headers'
-    l.dependency 'proj4', '~> 4.8.0'
+#    l.dependency 'proj4', '~> 4.8.0'
 #   Pulled internally
 #    l.dependency 'shapelib'
     l.dependency 'clipper', '~> 6.1.3a'
