@@ -107,10 +107,12 @@ Pod::Spec.new do |s|
     mc.dependency 'WhirlyGlobe/octencoding'
     mc.dependency 'WhirlyGlobe/Lib'
     mc.dependency 'WhirlyGlobe/MaplyComponent-Headers'
+    mc.dependency 'AFNetworking', '2.5'
 #    mc.dependency 'KissXML'
 #    mc.dependency 'SMCalloutView'
 #    mc.dependency 'FMDB'
 #    mc.dependency 'GoogleProtobuf', '3.0.0'
+
     mc.libraries = 'z', 'xml2'
     mc.frameworks = 'CoreLocation', 'MobileCoreServices', 'SystemConfiguration', 'CFNetwork'
   end
